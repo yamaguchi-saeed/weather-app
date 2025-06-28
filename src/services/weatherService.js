@@ -7,8 +7,6 @@ const getWeatherData = async (infoType, searchParams) => {
     const url = new URL(BASE_URL + infoType);
     url.search = new URLSearchParams({ ...searchParams, appid: API_KEY });
     
-    console.log('Fetching from:', url.toString()); // Debug log
-    
     const res = await fetch(url);
     const data = await res.json();
     
@@ -29,6 +27,7 @@ const formatCurrentWeather = (data) => {
         sys: { country, sunrise, sunset },
         weather,
         wind: { speed },
+        timezone,
     } = data;
 
     const { main: details, icon } = weather[0];
@@ -49,39 +48,72 @@ const formatCurrentWeather = (data) => {
         details,
         icon,
         speed,
+        timezone,
     };
 };
 
-// Updated function to work with current weather only
+// NEW: Format the free 5-day forecast data
+const formatForecastWeather = (data) => {
+    const { list, city } = data;
+    const timezoneOffset = city.timezone; // timezone offset in seconds
+    
+    // Get daily forecast (one per day at noon)
+    const daily = list
+        .filter((item, index) => index % 8 === 4) // Every 8th item starting from index 4 (noon)
+        .slice(0, 5)
+        .map(d => ({
+            title: formatToLocalTime(d.dt, timezoneOffset, "ccc"),
+            temp: d.main.temp,
+            icon: d.weather[0].icon
+        }));
+    
+    // Get hourly forecast (next 5 readings)
+    const hourly = list
+        .slice(1, 6)
+        .map(d => ({
+            title: formatToLocalTime(d.dt, timezoneOffset, "hh:mm a"),
+            temp: d.main.temp,
+            icon: d.weather[0].icon
+        }));
+    
+    return { daily, hourly, timezone: timezoneOffset };
+};
+
 const getFormattedWeatherData = async (searchParams) => {
     try {
-        console.log('API Key available:', !!API_KEY); // Debug log
-        
+        // Get current weather
         const formattedCurrentWeather = await getWeatherData("weather", searchParams)
             .then(formatCurrentWeather);
         
-        // Return only current weather data since we're using free tier
-        return {
-            ...formattedCurrentWeather,
-            // Add empty arrays for forecast components to prevent errors
-            daily: [],
-            hourly: [],
-            timezone: null
+        // Get forecast data using the FREE forecast endpoint
+        const { lat, lon } = formattedCurrentWeather;
+        const formattedForecastWeather = await getWeatherData("forecast", {
+            lat,
+            lon,
+            units: searchParams.units,
+        }).then(formatForecastWeather);
+        
+        return { 
+            ...formattedCurrentWeather, 
+            ...formattedForecastWeather 
         };
         
     } catch (error) {
         console.error("Error fetching weather data:", error);
-        throw error; // Re-throw so components can handle the error
+        throw error;
     }
 };
 
 const formatToLocalTime = (
     secs,
-    zone,
+    timezoneOffset,
     format = "ccc dd LLL yyyy' | Local time: 'hh:mm a"
-) => DateTime.fromSeconds(secs).setZone(zone).toFormat(format);
+) => {
+    const utcTime = DateTime.fromSeconds(secs);
+    const localTime = utcTime.plus({ seconds: timezoneOffset });
+    return localTime.toFormat(format);
+};
 
-// Fixed the typo in the URL (removed extra dot)
 const iconUrlFromCode = (code) => `https://openweathermap.org/img/wn/${code}@2x.png`;
 
 export default getFormattedWeatherData;
