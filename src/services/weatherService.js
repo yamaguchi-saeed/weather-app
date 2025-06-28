@@ -1,31 +1,26 @@
 import { DateTime } from 'luxon';
 
-
-
 const API_KEY = process.env.REACT_APP_OPENWEATHER_API_KEY;
 const BASE_URL = "https://api.openweathermap.org/data/2.5/";
-
-
-// https://api.openweathermap.org/data/2.5/weather?q=tokyo&appid=XXXXXXXXXXXXXXXXXXXX
-//use this to check objects/ data to be used, like coord, wind, temp, secs, dt, etc.
 
 const getWeatherData = async (infoType, searchParams) => {
     const url = new URL(BASE_URL + infoType);
     url.search = new URLSearchParams({ ...searchParams, appid: API_KEY });
-
+    
+    console.log('Fetching from:', url.toString()); // Debug log
+    
     const res = await fetch(url);
     const data = await res.json();
-
+    
     if (!res.ok) {
+        console.error('API Error:', data);
         throw new Error(data.message || "API error");
     }
-
+    
     return data;
 };
 
-
 const formatCurrentWeather = (data) => {
-
     const {
         coord: { lat, lon },
         main: { temp, feels_like, temp_min, temp_max, humidity },
@@ -34,10 +29,9 @@ const formatCurrentWeather = (data) => {
         sys: { country, sunrise, sunset },
         weather,
         wind: { speed },
+    } = data;
 
-    } = data
-
-    const { main: details, icon } = weather[0]
+    const { main: details, icon } = weather[0];
 
     return {
         lat,
@@ -55,51 +49,30 @@ const formatCurrentWeather = (data) => {
         details,
         icon,
         speed,
-    }
+    };
 };
 
-const formatForecastWeather = (data) => {
-    let { timezone, daily, hourly } = data;
-    daily = daily.slice(1, 6).map(d => {
-        return {
-            title: formatToLocalTime(d.dt, timezone, "ccc"),
-            temp: d.temp.day,
-            icon: d.weather[0].icon
-        }
-    })
-
-    hourly = hourly.slice(1, 6).map(d => {
-        return {
-            title: formatToLocalTime(d.dt, timezone, "hh:mm a"),
-            temp: d.temp,
-            icon: d.weather[0].icon
-        }
-    });
-
-    return { timezone, daily, hourly };
-}
-
-
+// Updated function to work with current weather only
 const getFormattedWeatherData = async (searchParams) => {
-
     try {
-        const formattedCurrentWeather = await getWeatherData
-            ("weather", searchParams).then(formatCurrentWeather)
-
-        const { lat, lon } = formattedCurrentWeather
-
-        const formattedForecastWeather = await getWeatherData("onecall", {
-            lat,
-            lon,
-            exclude: "current, minutely, alert",
-            units: searchParams.units,
-        }).then(formatForecastWeather);
-
-        return { ...formattedCurrentWeather, ...formattedForecastWeather };
+        console.log('API Key available:', !!API_KEY); // Debug log
+        
+        const formattedCurrentWeather = await getWeatherData("weather", searchParams)
+            .then(formatCurrentWeather);
+        
+        // Return only current weather data since we're using free tier
+        return {
+            ...formattedCurrentWeather,
+            // Add empty arrays for forecast components to prevent errors
+            daily: [],
+            hourly: [],
+            timezone: null
+        };
+        
     } catch (error) {
         console.error("Error fetching weather data:", error);
+        throw error; // Re-throw so components can handle the error
     }
-
 };
 
 const formatToLocalTime = (
@@ -108,9 +81,8 @@ const formatToLocalTime = (
     format = "ccc dd LLL yyyy' | Local time: 'hh:mm a"
 ) => DateTime.fromSeconds(secs).setZone(zone).toFormat(format);
 
-
-const iconUrlFromCode = (code) => `https://openweathermap.org./img/wn/${code}@2x.png`;
+// Fixed the typo in the URL (removed extra dot)
+const iconUrlFromCode = (code) => `https://openweathermap.org/img/wn/${code}@2x.png`;
 
 export default getFormattedWeatherData;
-
 export { formatToLocalTime, iconUrlFromCode };
