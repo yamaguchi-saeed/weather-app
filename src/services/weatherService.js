@@ -10,7 +10,7 @@ const BASE_URL = "https://api.openweathermap.org/data/2.5/";
 //use this to check objects/ data to be used, like coord, wind, temp, secs, dt, etc.
 
 const getWeatherData = (infoType, searchParams) => {
-    const url = new URL(BASE_URL + "/" + infoType)
+    const url = new URL(BASE_URL + infoType)
     url.search = new URLSearchParams(
         { ...searchParams, appid: API_KEY });
 
