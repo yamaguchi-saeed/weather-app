@@ -27,7 +27,6 @@ const formatCurrentWeather = (data) => {
         sys: { country, sunrise, sunset },
         weather,
         wind: { speed },
-        timezone,
     } = data;
 
     const { main: details, icon } = weather[0];
@@ -48,54 +47,31 @@ const formatCurrentWeather = (data) => {
         details,
         icon,
         speed,
-        timezone,
     };
-};
-
-// NEW: Format the free 5-day forecast data
-const formatForecastWeather = (data) => {
-    const { list, city } = data;
-    const timezoneOffset = city.timezone; // timezone offset in seconds
-    
-    // Get daily forecast (one per day at noon)
-    const daily = list
-        .filter((item, index) => index % 8 === 4) // Every 8th item starting from index 4 (noon)
-        .slice(0, 5)
-        .map(d => ({
-            title: formatToLocalTime(d.dt, timezoneOffset, "ccc"),
-            temp: d.main.temp,
-            icon: d.weather[0].icon
-        }));
-    
-    // Get hourly forecast (next 5 readings)
-    const hourly = list
-        .slice(1, 6)
-        .map(d => ({
-            title: formatToLocalTime(d.dt, timezoneOffset, "hh:mm a"),
-            temp: d.main.temp,
-            icon: d.weather[0].icon
-        }));
-    
-    return { daily, hourly, timezone: timezoneOffset };
 };
 
 const getFormattedWeatherData = async (searchParams) => {
     try {
         // Get current weather
-        const formattedCurrentWeather = await getWeatherData("weather", searchParams)
-            .then(formatCurrentWeather);
+        const currentWeather = await getWeatherData("weather", searchParams);
+        const formattedCurrentWeather = formatCurrentWeather(currentWeather);
         
-        // Get forecast data using the FREE forecast endpoint
+        // Get forecast data just for the timezone info (WE USE free API)
         const { lat, lon } = formattedCurrentWeather;
-        const formattedForecastWeather = await getWeatherData("forecast", {
+        const forecastData = await getWeatherData("forecast", {
             lat,
             lon,
             units: searchParams.units,
-        }).then(formatForecastWeather);
+        });
         
-        return { 
-            ...formattedCurrentWeather, 
-            ...formattedForecastWeather 
+        // Extract timezone from forecast data
+        const timezone = forecastData.city.timezone; // This is the correct timezone offset!
+        
+        return {
+            ...formattedCurrentWeather,
+            timezone: timezone, // Now we have the correct timezone!
+            daily: [],
+            hourly: [],
         };
         
     } catch (error) {
@@ -109,6 +85,7 @@ const formatToLocalTime = (
     timezoneOffset,
     format = "ccc dd LLL yyyy' | Local time: 'hh:mm a"
 ) => {
+    // Convert UTC timestamp to local time using timezone offset
     const utcTime = DateTime.fromSeconds(secs);
     const localTime = utcTime.plus({ seconds: timezoneOffset });
     return localTime.toFormat(format);
