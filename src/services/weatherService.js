@@ -67,24 +67,25 @@ const formatForecastWeather = (data) => {
 
     console.log('Timezone offset:', timezone, 'seconds');
 
-    // Group forecasts by date and pick one that's closest to 12 PM (noon)
-    const dailyMap = new Map();
+    // Group items by weekday title, and pick one per day
+const dailyMapByTitle = new Map();
 
-    list.forEach(item => {
-        const date = DateTime.fromSeconds(item.dt).plus({ seconds: timezone }).toFormat('yyyy-MM-dd');
-        const hour = DateTime.fromSeconds(item.dt).plus({ seconds: timezone }).hour;
+list.forEach(item => {
+    const weekday = formatToLocalTime(item.dt, timezone, "ccc"); // e.g., Mon, Tue
+    const hour = DateTime.fromSeconds(item.dt).plus({ seconds: timezone }).hour;
 
-        // Keep the forecast closest to noon for each day
-        if (!dailyMap.has(date) || Math.abs(hour - 12) < Math.abs(dailyMap.get(date).hour - 12)) {
-            dailyMap.set(date, {
-                dt: item.dt,
-                temp: item.main.temp,
-                icon: item.weather[0].icon,
-                hour: hour
-            });
-        }
-    });
+    if (!dailyMapByTitle.has(weekday) || Math.abs(hour - 12) < Math.abs(dailyMapByTitle.get(weekday).hour - 12)) {
+        dailyMapByTitle.set(weekday, {
+            title: weekday,
+            temp: item.main.temp,
+            icon: item.weather[0].icon,
+            hour
+        });
+    }
+});
 
+const daily = Array.from(dailyMapByTitle.values()).slice(0, 5); // Always get 5 unique weekdays
+    
     // Convert the map to an array, skip today, and keep next 5 days
     const daily = Array.from(dailyMap.values())
         .slice(1, 6)
